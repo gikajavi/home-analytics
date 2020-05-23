@@ -1,0 +1,557 @@
+---
+title: "Tipologia i cicle de vida de les dades: Pràctica 2"
+author: "Autors: Marc Serra Suñol i Javier Beltran Lou"
+date: "Maig 2020"
+output:
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+    includes:
+      in_header: PRA-header.htm
+  word_document: default
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+---
+
+
+# Codi font en R de la pràctica 2
+
+## Elecció del joc de dades
+
+El següent codi R dóna suport a, i és la font principal de, les respostes a les preguntes de l'enunciat de la pràctica. Consta de diferents seccions on es tracta els diferents punts requerits quan aquests tenen que veure amb alguna solució de codi font.
+
+
+
+## Integració i selecció de les dades
+
+A continuació s'inclou el codi que integra en l'entorn de R les dades sobre els datasets obitnguts amb el Web Scraper desenvolupat en la pràctica 1 d'aquesta assignatura. A part del dataset obtingut en aquella ocasió, utilitzem també un nou datase obtingut dies després per tal de poder realitzar algunes anàlisis establertes des del principi, tal com comparar els preus a la baixa o alça de certs immobles o la possibilitat que les ofertes hagin desaparegut (potser per haver estat acceptades) en aquell període de temps.
+
+Càrrega de les dades
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+
+# Càrrega del primer dataset
+filePath <-"dataset_10_04_2020.csv"
+ds_1004 <- read.csv(filePath, header=TRUE, sep=";", stringsAsFactors=F, colClasses=c("Sup_m2"="character"), encoding = "UTF-8")
+attach(ds_1004)
+#colnames(ds_1004)
+head(ds_1004)
+
+# Càrrega del segon dataset
+filePath2 <-"dataset_26_04_2020.csv"
+ds_2604 <- read.csv(filePath2, header=TRUE, sep=";", stringsAsFactors=F, colClasses=c("Sup_m2"="character"), encoding = "UTF-8")
+attach(ds_2604)
+head(ds_2604)
+
+# Nota: Hem carregat els camps Sup_m2 perquè al CSV tenen seperador de milers amb el punt i per defecte R interpreta numeric, lo qual provocava errors en les superfícies de 1000 m2 o majors. Més endavant es converteix aquesta columna a integer
+
+
+```
+
+
+Fusió de datasets
+```{r message=FALSE, warning=FALSE}
+
+# Es suposa que el valor per als atributs id de cada dataset és únic. Fem, però, un comprovació per estar-ne segurs:
+NumRegs_ds1004 <- length(ds_1004$Id)
+NumRegsUniq_ds1004 <- length(unique(ds_1004$Id))
+sprintf("En Dataset1: #Número de regs = %s != #Número de regs. únicos = %s", NumRegs_ds1004, NumRegsUniq_ds1004)
+
+
+NumRegs_ds2604 <- length(ds_2604$Id)
+NumRegsUniq_ds2604 <- length(unique(ds_2604$Id))
+sprintf("En Dataset2: #Número de regs = %s != #Número de regs. únicos = %s", NumRegs_ds2604, NumRegsUniq_ds2604)
+```
+
+Sembla que hi ha alguns valors repetits als dos datasets. Haurem de fer alguna operació d'anàlisi/neteja. Ho hem de fer ara per assegurar que la fusió de datasets sigui fiable:
+
+```{r message=FALSE, warning=FALSE}
+# Elements duplicats al primer dataset
+dup_1004 <- ds_1004$Id[duplicated(ds_1004$Id)]
+
+# Elements duplicats al segon dataset
+dup_2604 <- ds_2604$Id[duplicated(ds_2604$Id)]
+
+
+# Seleccionant els duplicats i ordenant per id podem explorar l'aspecte de les files:
+# Primer dataset
+duplicated_rows_1004 <- filter(ds_1004, Id %in% c(dup_1004))
+duplicated_rows_1004 <- duplicated_rows_1004[with(duplicated_rows_1004, order(duplicated_rows_1004$Id)),]
+duplicated_rows_1004
+
+# Segon dataset
+duplicated_rows_2604 <- filter(ds_2604, Id %in% c(dup_2604))
+duplicated_rows_2604 <- duplicated_rows_2604[with(duplicated_rows_2604, order(duplicated_rows_2604$Id)),]
+duplicated_rows_2604
+
+
+# Després d'una exploració (accedint a la font original) d'alguns dels valors duplicats, s'arriba a la conclusió que es tracta d'un problema en el scraper. Es pot eliminar amb seguretat els registres duplicats i és així com es procedeix:
+
+# Eliminació de duplicitats:
+ds_1004 <- ds_1004[!duplicated(ds_1004$Id), ]
+ds_2604 <- ds_2604[!duplicated(ds_2604$Id), ]
+
+
+# Comprovar que ara els dos datasets ja no tenen registres duplicats:
+NumRegs_ds1004 <- length(ds_1004$Id)
+NumRegsUniq_ds1004 <- length(unique(ds_1004$Id))
+sprintf("En Dataset1: #Número de regs = %s = #Número de regs. únicos = %s", NumRegs_ds1004, NumRegsUniq_ds1004)
+
+NumRegs_ds2604 <- length(ds_2604$Id)
+NumRegsUniq_ds2604 <- length(unique(ds_2604$Id))
+sprintf("En Dataset2: #Número de regs = %s = #Número de regs. únicos = %s", NumRegs_ds2604, NumRegsUniq_ds2604)
+```
+
+
+Ja amb els datasets sense duplicitats, anem a fer la fusió dels dos, creant noves columnes com PreuNou, NovaOferta, HaBaixat, HaPujat, HaEstatLlogat
+
+```{r message=FALSE, warning=FALSE}
+
+# En realitat, del segon dataset només ens interessa conservar el preu i el id per fer un criteri de merge, doncs la resta de camps (excepte la data) són iguals
+# PreuActual
+ds_2604 <- select(ds_2604, "Id", "PreuActual")
+
+# Renombrem la columna preu al primer dataset
+ds_1004 <- rename(ds_1004, Preu=PreuActual)
+
+# Ara sí, el merge:
+dataset = merge(x = ds_1004, y = ds_2604, by = "Id", all = TRUE)
+
+# No ens interessa les ofertes que eren noves al segon dataset
+dataset <- dataset[!is.na(dataset$idx),]
+
+# Ara tenim les files del primer dataset amb la nova informció del preu del segon dataset
+# Ho veiem ràpidament amb el nombre total de files
+count(dataset)
+
+```
+
+El dataset ja està disponible. En les següents fases se li faran tractaments de neteja, discretització etc...
+Explorem de nou les columnes que n'han resultat, per posar en perspectiva el potencial que aquest dataset pot tenir
+
+```{r message=FALSE, warning=FALSE}
+# Llistar les columnes
+colnames(dataset)
+```
+
+
+Tenim 24 atributs al dataset final. Val a dir que alguns d'ells s'acabaran eliminant perquè només aporten soroll. Tot i així, la majoria dels atributs són interessants a l'hora de valorar la informació d'un lloguer. S'espera que siguin suficients com per poder fer prediccions interessants o associacions entre característiques. Sembla que alguns atributs poden ser més importants que d'altres. Per exemple, es suposa que els metres quadrats són un millor predictor del preu demanat que no pas la planta, però caldrà veure si realment això és així.
+
+## Anàlisi exploratòria del joc de dades. Distribucions, correlacions, anomalies... Neteja del dataset, acondicionament, ...
+
+Començarem mostrant un resum de com ha quedat al dataset amb què s'ha de treballar
+
+```{r message=FALSE, warning=FALSE}
+str(dataset)
+```
+
+Crec que no és necessari explicar cadascuna de les columnes, doncs tracten d'una temàtica coneguda per tothom. 
+Hi ha camps que podrien ser categòrics per no ho són degut a que s'han carregat els csv expressament perquè no es tractin per defecte. Els convertirem quan toqui.
+
+El primer que farem, abans de qualsevol anàlisi es un primer pas de neteja, per lliurar-nos d'algunes columnes que no són interessants
+
+Id => Ens ha servit pe poder vincular els dos datasets en l'obtenció del definitiu. Ara molesta
+Provincia => en el nostre dataset sempre és Barcelona
+Municipi => Després del filtrat, sempre és Barcelona
+idx, DataOferta => Són dades extra que no aporten cap valor a l'analítica i, de fet, podria perjudicar-la
+TipusOferta => Només tractem lloguers, així que no la necessitem
+
+Nota: L'atribut URL l'eliminarem més endavant, doncs pot ser interessant de mantenir a la fase de neteja per estudiar possibles outliers etc al poder consultar la font original de les dades
+
+
+```{r message=FALSE, warning=FALSE}
+dataset <- select(dataset, -c(Id, Provincia, Municipi, idx, DataOferta, TipusOferta))
+
+```
+Ara ja tenim els 18 atributs útils + la URL a la oferta
+
+
+EN l'anàlisi exploratori inicial ens interessarem per veure quines correlacions hi ha entre les variables del dataset i particulament amb el preu del lloguer ofertat
+
+En fases més avançades ens hem proposat de predir si una oferta pot baixar de preu al cap d'un temps determinat o si és possible que al cap d'aquest temp hagi desaparegut (presumptament per haver estat llogat l'habitatge). Mirem de manera preliminar quins habitatges van baixar de preu o quins van ser llogats amb el dataset actua.
+
+Nota: Considerar que el motiu pel qual una oferta que va deixar d'existir és perquè l'habitatge va ser llogat és una mica agoserat, però per simplificar, en aquesta pràctica ho considerarem així.
+
+Necessitem fer una transformació extra al dataset que podem considerar com a neteja. Els registres que tinguin NA a la columan PreuActual els podem considerar com a "Han estat llogats". Crearem una nova columna per constatar aquest fet i imputarem els NA de PreuActual amb el Preu inicial de l'oferta
+```{r message=FALSE, warning=FALSE}
+
+# Creació de nova variable lògica
+dataset$HaEstatLlogat = ifelse(is.na(dataset$PreuActual), TRUE, FALSE) 
+
+# Veure quants lloguers han desaparegut en el temps entre extraccions (i que considerem com a que han estat llogats)
+sprintf("Nombre d'habitatges que han estat llogats: %s", sum(dataset$HaEstatLlogat))
+
+# Anem a imputar el preu original a tots els habitatges que van ser llogats per tal d'eliminar valors mancants
+# Renombro el Preu perquè quedi més clar que és el preu inicial (primera extracció). Segurament hagués estat millor fer-ho abans
+dataset <- rename(dataset, PreuInicial=Preu)
+dataset$PreuActual = ifelse(is.na(dataset$PreuActual), dataset$PreuInicial, dataset$PreuActual)
+
+# Extraiem informació d'aquells immobles que han baixat de preu i els comptem
+sprintf("Nombre d'habitatges que han baixat de preu: %s", count(dataset[dataset$PreuActual < dataset$PreuInicial,]))
+
+# Per curiositat, mirem també si hi ha immobles que han pujat de preu
+sprintf("Nombre d'habitatges que han pujat de preu: %s", count(dataset[dataset$PreuActual > dataset$PreuInicial,]))
+
+# N'hi ha uns quants també, tot i que no molts. Tampoc serà una informació que ens interessi molt per a les anàlisis
+
+
+```
+Hem readaptat una mica el dataset original per fer una primera exploració molt bàsica. Ara sabem que en un període d'unes 2 setmanaes (temps entre extraccions) 230 ofertes han estat rebaixades de preu. També hem vist que 691 ofertes havien desaparegut. Hem suposat que són ofertes de immobles que han estat llogats (amb un cert grau d'incertesa, però)
+
+
+Ara anem a veure al dataset que tenim en aquest punt com són els tipus de les dades i si les hem de treballar una mica per canviar de format
+```{r}
+str(dataset)
+
+```
+
+Algunes dades que són categòriques estan com a Chr, alguns valors haurien de ser Lògics però estan també com a chr. Anem a convetir el tipus de cada columna al més apropiat
+
+```{r}
+# Varibales categòriques
+dataset$TipusImmoble <- as.factor(dataset$TipusImmoble)
+dataset$Zona <- as.factor(dataset$Zona)
+dataset$EficienciaEnergetica <- as.factor(dataset$EficienciaEnergetica)
+dataset$ClasseEmissions <- as.factor(dataset$ClasseEmissions)
+
+# Variables booleanes
+dataset$Parking <- as.logical(dataset$Parking)
+dataset$Calefaccio <- as.logical(dataset$Calefaccio)
+dataset$AC <- as.logical(dataset$AC)
+dataset$Moblat <- as.logical(dataset$Moblat)
+dataset$Jardi <- as.logical(dataset$Jardi)
+dataset$Ascensor <- as.logical(dataset$Ascensor)
+
+
+# Posar les superfícies com a enters:
+dataset$Sup_m2 = sub("\\.", "", dataset$Sup_m2)
+dataset$Sup_m2 = as.integer(dataset$Sup_m2)
+
+
+# Veure com ha quedat amb les conversions:
+str(dataset)
+
+```
+
+En aquest punt, cada columna és del tipus més apropiat. 
+
+Però em sorprèn veure que EficienciaEnergetica i ClasseEmissions tenen més nivells dels que hauria esperat. Explorem més a fons per trobar la raó:
+
+```{r}
+
+unique(dataset$EficienciaEnergetica)
+unique(dataset$ClasseEmissions)
+
+```
+
+Per la primera variable tot sembla en ordre, excepte que hi ha la classe Z (inesperada però potser no incorrecta)
+Per la variable ClasseEmissions farem un simple tractament de conversió a majúscules
+
+```{r}
+dataset$ClasseEmissions <-  as.factor(toupper(dataset$ClasseEmissions))
+unique(dataset$ClasseEmissions)
+
+```
+
+Una variable calculada que crec que pot ajudar, el preu per metre quadrat
+```{r}
+dataset$PreuMetre2 = dataset$PreuActual / dataset$Sup_m2  
+```
+
+
+Una mica de summary per veure com és el dataset que tenim fins ara i establir algunes primeres observacions
+
+```{r}
+summary(dataset)
+```
+
+D'entre les variables més interessants, podem destacar aspectes com:
+
+- La gran majoria d'habitatges, amb molta diferència, són pisos, seguits molt de lluny pels àtics
+- Sembla haver alguns outliers en els preus dels lloguers, principalment pel que fa als màxims. Ho analitzarem més endavant, doncs segurament caldrà fer actuacions de neteja per no perjudicar anàlisis posteriors
+- Lo anterior té una incidència en el preu del metre quadrat
+- El valor de lloguer mig és bastant més alt que que el valor medià
+- Com és d'esperar el preu mig actual és menor que l'inicial, concretament 7 Eur. Potser si haguèssim inclòs ofertes noves (que no estaven al primer dataset) aquest valor haguès pogut estar menys clar (principalment si ens trobéssim en una situació de marcat de lloguers a l'alça).
+- Per la info. dels NA's, s'observa que hi ha bastantes variables que no s'estan informant. Per exemple, tenim al voltant del 50% de registres dels que no coneixem l'any de construcció. Ens topem amb una situació similar pel nombre de banys o la planta. Haurem de ser curosos amb aquests atributs a l'hora de prendre una decisió respecte a com actuar per imputar valors o descartar registres
+- La Superífice en m2 quadrats té valors que van dels 9m2 (estranyament petit) als 1678m2 (molt gran). Caldrà veure què fer amb els outliers.
+- Hi ha coses estranyes respecte al menor número de banys, 2, quan lo esperable seria 1
+- També haurem d'analitzar la dada Any de construcció, doncs el mínim valor és 1, lo qual no és possible.
+- Pel que fa als valors lògics, el resum sembla estar bastant alineat al que poguem intuir respecte a la temàtica del dataset (la meïtat dels habitatges amb mobles, més immboles sense parking que amb parking, etc..)
+
+
+Ens fixem ara amb la variable del preu, que és possiblement la variable de major interès:
+
+```{r}
+summary(dataset$PreuInicial)
+summary(dataset$PreuActual)
+
+```
+
+Abans de continuar, veiem que hi ha 5 missing values. 
+Aquí podríem assignar, quan fos possible, el preu de l'altra columna quan a una de les dues faltés, però tenint en compte que són pocs registres, la millor decisió crec que és no comptar amb aquests registres. Així doncs, els eliminem:
+
+```{r}
+dataset <- dataset[!is.na(dataset$PreuInicial),]
+dataset <- dataset[!is.na(dataset$PreuActual),]
+
+```
+
+Amb la variable neta, analitzem ara com està distribuïda:
+
+
+```{r}
+library(ggplot2)
+ggplot(dataset, aes(x = PreuInicial)) +  geom_histogram() +  ylab("Nombre d'habitatges") +  xlab("Preu de lloguer")
+```
+
+
+El primer que salta a la vista és com el gràfic resultant és molt ample pel que semblaria necessari. Això és així perquè hi ha alguns outliers molt destacats. Més endavant veurem què fer amb aquests i altres outliers.
+El mateix output de stat_bin() aconsella triar un binwidth diferent. Provem per veure si a la zona de major densitat veiem una mica més d'informació:
+
+```{r}
+
+ggplot(dataset, aes(x = PreuInicial)) +  geom_histogram(binwidth=500) +  ylab("Nombre d'habitatges") +  xlab("Preu de lloguer")
+
+```
+
+En realitat, no ens aporta molta més informació. Confirmem que tenim bastants possibles outliers (algun de molt gran) i que la majoaria de preus estan en la franja dels 1000 a 2000 €.
+
+D'altra banda, la variable no sembla seguir una distribució normal. Podem confirmar-ho fent un test de normalitat:
+
+```{r}
+qqnorm(dataset$PreuInicial);qqline(dataset$PreuInicial, col = 2)
+
+```
+
+Una de les variable de major interès al dataset és a priori la superfície en m2 dels habitatges:
+
+```{r message=FALSE, warning=FALSE}
+summary(dataset$Sup_m2)
+
+
+```
+Sorprèn el valor mínim (possiblement un error)
+També el màxim, tot i que es pot tractar d'un valor correcte
+
+Al cercar els valors petits de superfície en la font original, es comprova que el problema és que es tracta de lloguers d'habitacions i no de pisos o cases complets. 
+
+La decisió correcta aquí serà eliminar aquestes ofertes (basant-nos en la URL):
+
+```{r}
+dataset <- dataset[!grepl('alquiler-piso-habitacion', dataset$Url),]
+dataset <- dataset[!grepl('alquiler-apartamento-alquilo_habitacion', dataset$Url),]
+dataset <- dataset[!grepl('alquiler-estudio-habitacion', dataset$Url),]
+dataset <- dataset[!grepl('-i4585003734030.htm', dataset$Url),] # <- Cas especial (Probablement un pis de uns 100m2; es comprova que hi ha un error accedint a la URL de l'oferta)
+
+# Eliminem també alguns pocs registres que tenim sense superfície:
+dataset <- dataset[!is.na(dataset$Sup_m2),]
+
+
+summary(dataset$Sup_m2)
+
+```
+
+Hem fet neteja a la variable de superfície abans de fer alguna exploració gràfica
+
+Ara podem intentar veure la seva distribució, tal i com s'ha fet anteriorment amb el preu
+
+```{r}
+ggplot(dataset, aes(x = Sup_m2)) +  geom_histogram(binwidth=20) +  ylab("Nombre d'habitatges") +  xlab("Superfície (m2)")
+qqnorm(dataset$Sup_m2);qqline(dataset$Sup_m2, col = 2)
+
+```
+
+Veiem bàsicament dues coses:
+
+1. La variable superfície no segueix una distribució normal
+2. les gràfiques són molt semblants a les obtingudes amb la variable preu (sembla bastant lògica la correlació entre superfície i preu, d'altra banda).
+
+
+S'ha fet un petit anàlisi de les dues variables potser més importants del dataset, el preu i la superfície en m2 i, tal i com indica la intuïció, estan molt correlacionades.
+
+Està clar que la superfície útil d'un habitatge és doncs un predictor molt obvi del preu de venda o lloguer del mateix, però tenim moltes altres variables que segur que tenen el seu impacte. 
+
+Seguim ara amb la neteja / acondicionat d'altres atributs del dataset:
+
+```{r}
+summary(dataset)
+
+```
+
+```{r}
+# Anem un a un:
+
+# 1. Atribut TipusImmoble: No cal fer res. No hi ha valors buits i és correcte que estigui com a factor
+
+# 2. Atribut Zona: 
+# Trobem que hi ha moltes zones:
+sprintf("Nombre de zones: %s", length(unique(dataset$Zona)))
+# Podria ser un bona idea agrupar les zones en districtes (de moment, no ho fem)
+
+# 3. Atribut NumHabitacions: Hem vist al summary que hi tenim alguns, no molts, NA's. També sembla haver-hi algun outlier bastant obvi que anirem a analitzar millor
+unique(dataset$NumHabitacions)
+
+# El valor 850 "canta" molt. Hi ha altres valors grans però que poden ser legítims. Anem a veure amb una gràfica:
+# Eliminem el registre "850"
+dataset <- filter(dataset, NumHabitacions != 850 | is.na(NumHabitacions))
+
+
+# Visualitzem outliers gràficament
+boxplot(dataset$NumHabitacions)
+
+# De la gràfica resultant veiem que hi ha outliers a partir d'habitatges amb més de 5 habitacions, lo qual em sorprèn una mica, perquè 5 habitacions no semblen tantes, però sembla bastant alineat amb el fet que la mitja i el valor medià són propers i al voltant de 3. 
+# S'han investigat aquells immobles amb més de 7 habitacions, consultant la font original URL, i s'ha vist que corresponen a cases amb una gran superfície que majorment estan pensades com a possibles petits centres educatius o parvularis, excepte alguna casa de luxe. De moment, deixem aquests registres al dataset. Més endavant, al estudiar altres atributs, potser decidim eliminar-los
+
+# L'atribut NumHabitacions presenta 78 NA's. 
+count(dataset[is.na(dataset$NumHabitacions),])
+
+# Es pren la decisió d'imputar valors amb algun tècnica. En aquest cas farem servir el valor central de la mediana (3), doncs hem vist que la gran majoria d'immobles tenen valors en aquest punt. Podria ser millor utilitzar alguna funció de la superfície o tècniques de imputació més elaborades, però això ho deixem per experimentar més endavant amb altres atributs.
+dataset$NumHabitacions[is.na(dataset$NumHabitacions)] <- median(dataset$NumHabitacions, na.rm = TRUE)
+
+
+# 4. Atribut NumBanys
+# Sorprèn aquí que el mínim sigui 2 (s'esperava 1). Es fan diferents comprovacions a l'origen de dades (URL) de pisos amb superfície petita i en tots els casos es veu que es tracta d'errors (hi apareix 2 quan a la descripció només es parla d'un)
+
+# Tenim 2437 ofertes amb NumBanys no imputat i hem vist que en molts immobles (presuntament només els petits) aquesta dada no és fiable
+count(dataset[is.na(dataset$NumBanys),])
+
+# Anem a veure amb una gràfica com es comporta la variable NumBanys en funció de la superfície, tenint en compte immobles de fins a 100m2 i no perdent de vista l'error de l'origen de dades per a immobles petits 
+plot(x = dataset$NumBanys[dataset$Sup_m2 < 100], dataset$Sup_m2[dataset$Sup_m2 < 100])
+
+# La gràfica ens mostra que el valor 2 és amb diferència el més habitual, però que comencen a haver-hi pisos amb 3 banys a partir dels 70m2.
+# Anem a veure una gràfica de immobles a partir de 100m2 per veure si al nombre de banys ja no abunda tant el valor 2
+plot(x = dataset$NumBanys[dataset$Sup_m2 > 99 & dataset$Sup_m2 < 300], dataset$Sup_m2[dataset$Sup_m2 > 99 & dataset$Sup_m2 < 300])
+
+# Dels 100 als 150 m2 el valor 2 i 3 estan repartits. Sembla que a partir de 150m2 el valor 3 commença a dominar
+# Al final, el que volem és imputar N. de banys als NA i farem el següent:
+
+# Donat que el tercer quartil de NumBanys és 3 i el tercer quartil de superfície el trobem a 120, assignarem 3 banys als immobles amb superfície major que 120m2
+# Als immobles amb sup. menor de 120m2 hi assignarem el valor 2 per al nombre de banys
+# Per pura intuïció corregirem els immobles de menys de 40m2 perquè tinguin només un bany assignat, doncs hem vist anteriorment que hi havia errors a la font de dades
+
+dataset$NumBanys[is.na(dataset$NumBanys) & dataset$Sup_m2 >= 120] <- 3
+dataset$NumBanys[is.na(dataset$NumBanys) & dataset$Sup_m2 < 120] <- 2
+dataset$NumBanys[dataset$Sup_m2 < 40] <- 1
+
+
+# 5. Atribut Any Construcció
+# Aquest atribut ens dona l'antiguitat de l'immoble. Trobem que hi ha molts NAs. Aquí, lògicament no podem aplicar mesures de tendència central, ni basar-nos en l'instint com s'ha fet amb el nombre de banys. Eliminar aquests registres no és una opció perquè l'antiguitat de l'immoble la considerem important
+# Tractarem de fer servir la tècnica de kNN per a imputació per mirar d'assignar anys de construccció raonables
+
+# Mirem abans possibles outliers, els quals podrien afectar a la precisió del model:
+boxplot(dataset$AnyConstruccio)
+
+# EN la gràfica anterior veiem que hi ha molts possibles outliers degut a habitatges antics
+
+ds_modernista <- filter(dataset, AnyConstruccio < 1900 & !is.na(AnyConstruccio))
+# Al filtrar pels més antics del 1900 ens donem compte que a Bcn hi ha bastants habitatges del segle XIX i fins i tot del XVIII que són correctes
+
+ds_premodernista <- filter(dataset, AnyConstruccio < 1850 & !is.na(AnyConstruccio))
+
+# Observem (consultant la font original) que encara hi ha alguns immobles vàlids anteriors al 1850, de totes formes decidim esborrar-los i, de pas, eliminar també alguns registres que amb seguretat no són correctes
+dataset <- filter(dataset, AnyConstruccio >= 1850 | is.na(AnyConstruccio))
+
+# Anem a veure si ara surt un boxplot menys infumable
+boxplot(dataset$AnyConstruccio)
+
+# Veiem que encara queda alguns outliers, però ens els quedem. Ara el dataset sí està més acondicionat per la imputació amb kNN
+
+# Per utilizar kNN farem servir el paquet VIM, que està pensat per utilitzar aquest mètode per la imputació de valors i ens abstraurà d'alguines tasques prèvies (que presuntament realitza internament)
+
+#install.packages("rlang")  # <= Vam tenir alguns problemes (per si fos necessari en altres instal·lacions de R)
+#install.packages("VIM")    # <= Llibreria que fem servir per imputar amb kNN (cal instal·lar el package i resoldre alguns problemes de dependències que van sorgir pel camí)
+
+library(VIM)  
+
+# El drama de kNN és escollir el valor de k. Per fer-ho bé, podríem entrenar un subconjunt del dataset (amb valors no NA) i veure amb quina k podem predir
+# millor la resta de registres que no han participat al training. En aquest punt ens coformarem amb uns quants valor de k i veure en quin cas les mesures
+# centrals no s'allunyen massa de les originals
+
+ds_knn_k5 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"))
+ds_knn_k6 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 6)
+ds_knn_k15 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 15)
+ds_knn_k50 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 50)
+
+summary(dataset$AnyConstruccio)
+summary(ds_knn_k5$AnyConstruccio)
+summary(ds_knn_k6$AnyConstruccio)
+summary(ds_knn_k15$AnyConstruccio)
+summary(ds_knn_k50$AnyConstruccio)
+
+```
+
+Al comparar ara mateix els valors de summary entre tots els datasets obtinguts, únicament em xoca el fet que el tercer quartil canvia bastant en tots els casos. Pensem que pot ser degut a que per als immobles més antics s'informa menys sovint de l'any de construcció. La resta de valors sí s'assemblen, en tots els casos, amb el que tenim al dataset original, així que crec que kNN ha fet una bona feina. Donat que no veig grans diferències en els diferents valors, decideixo quedar-me amb k=5, que és el paràmetre per defecte:
+
+```{r}
+
+dataset <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"))
+
+# Fem un nou summary per veure com ha quedat i que ens queda per tractar
+summary(dataset)
+
+# Queda l'atribut Planta amb NAs. Veiem que kNN ha creat un nou atribut AnyConstruccio_imp en què informa sobre quines files han estat imputades i quines no. Tot i ser interessant el treurem
+dataset <- select(dataset, -c(AnyConstruccio_imp))
+
+
+# 6. Atribut Planta
+# Anem a fer el mateix tractament amb kNN però amb menys explicacions:
+
+# Outliers:
+boxplot(dataset$Planta)
+
+# Sembla que els pisos on la planta estan per sobre de la 8 no són molt populars a Bcn
+ds_gratacels_de_bcn_que_serien_poca_cosa_a_manhattan <- dataset[dataset$Planta >= 10 & !is.na(dataset$Planta),]
+
+# Després de fer unes quantes cerques (URLs), decideixo deixar-los de moment doncs semblen correctes
+
+# Imputar amb kNN:
+ds_knn_k5 <- kNN(dataset, variable = c("Planta"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "AnyConstruccio", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"))
+ds_knn_k6 <- kNN(dataset, variable = c("Planta"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "AnyConstruccio", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 6)
+ds_knn_k15 <- kNN(dataset, variable = c("Planta"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "AnyConstruccio", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 15)
+ds_knn_k50 <- kNN(dataset, variable = c("Planta"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "AnyConstruccio", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 50)
+
+summary(dataset$Planta)
+summary(ds_knn_k5$Planta)
+summary(ds_knn_k6$Planta)
+summary(ds_knn_k15$Planta)
+summary(ds_knn_k50$Planta)
+
+# Ens quedem amb k = 5
+dataset <- kNN(dataset, variable = c("Planta"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "AnyConstruccio", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"))
+
+dataset <- select(dataset, -c(Planta_imp))
+summary(dataset)
+
+
+
+
+
+```
+
+Ara tenim un dataset amb totes les dades imputades. En alguns casos s'ha decidit no eliminar alguns outliers que s'han anat trobant, més que res perquè s'han considerat correctes. 
+
+
+
+
+
+********************************************************************************************
+Neteja feta. 
+
+Fins aquí hem cobert 
+
+OK 2. Integració i selecció de dades
+OK 3. Neteja de les dadees
+
+
+TODO: Ara queda la resta dels apartats
+
+4. Anàlisi de les dades
+5. Representació dels resultats a partir de taules i gràfiques. 
+6. Conclusión
+
+
