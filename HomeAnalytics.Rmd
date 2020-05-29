@@ -12,7 +12,7 @@ output:
     includes:
       in_header: PRA-header.htm
   word_document: default
-  pdf_document:
+  pdf_docume13853211nt:
     highlight: zenburn
     toc: yes
 ---
@@ -28,9 +28,9 @@ El següent codi R dóna suport a, i és la font principal de, les respostes a l
 
 ## Integració i selecció de les dades
 
-A continuació s'inclou el codi que integra en l'entorn de R les dades sobre els datasets obitnguts amb el Web Scraper desenvolupat en la pràctica 1 d'aquesta assignatura. A part del dataset obtingut en aquella ocasió, utilitzem també un nou datase obtingut dies després per tal de poder realitzar algunes anàlisis establertes des del principi, tal com comparar els preus a la baixa o alça de certs immobles o la possibilitat que les ofertes hagin desaparegut (potser per haver estat acceptades) en aquell període de temps.
+A continuació s'inclou el codi que integra en l'entorn de R les dades sobre els datasets obitnguts amb el Web Scraper desenvolupat en la pràctica 1 d'aquesta assignatura. A part del dataset obtingut en aquella ocasió, utilitzem també un nou dataset obtingut dies després per tal de poder realitzar algunes anàlisis establertes des del principi, tal com comparar els preus a la baixa o alça de certs immobles o la possibilitat que les ofertes hagin desaparegut (potser per haver estat acceptades) en aquell període de temps.
 
-Càrrega de les dades
+### Càrrega de les dades
 
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
@@ -40,13 +40,13 @@ filePath <-"dataset_10_04_2020.csv"
 ds_1004 <- read.csv(filePath, header=TRUE, sep=";", stringsAsFactors=F, colClasses=c("Sup_m2"="character"), encoding = "UTF-8")
 attach(ds_1004)
 #colnames(ds_1004)
-head(ds_1004)
+#head(ds_1004)
 
 # Càrrega del segon dataset
 filePath2 <-"dataset_26_04_2020.csv"
 ds_2604 <- read.csv(filePath2, header=TRUE, sep=";", stringsAsFactors=F, colClasses=c("Sup_m2"="character"), encoding = "UTF-8")
 attach(ds_2604)
-head(ds_2604)
+#head(ds_2604)
 
 # Nota: Hem carregat els camps Sup_m2 perquè al CSV tenen seperador de milers amb el punt i per defecte R interpreta numeric, lo qual provocava errors en les superfícies de 1000 m2 o majors. Més endavant es converteix aquesta columna a integer
 
@@ -54,7 +54,7 @@ head(ds_2604)
 ```
 
 
-Fusió de datasets
+### Fusió de datasets
 ```{r message=FALSE, warning=FALSE}
 
 # Es suposa que el valor per als atributs id de cada dataset és únic. Fem, però, un comprovació per estar-ne segurs:
@@ -82,12 +82,12 @@ dup_2604 <- ds_2604$Id[duplicated(ds_2604$Id)]
 # Primer dataset
 duplicated_rows_1004 <- filter(ds_1004, Id %in% c(dup_1004))
 duplicated_rows_1004 <- duplicated_rows_1004[with(duplicated_rows_1004, order(duplicated_rows_1004$Id)),]
-duplicated_rows_1004
+#duplicated_rows_1004
 
 # Segon dataset
 duplicated_rows_2604 <- filter(ds_2604, Id %in% c(dup_2604))
 duplicated_rows_2604 <- duplicated_rows_2604[with(duplicated_rows_2604, order(duplicated_rows_2604$Id)),]
-duplicated_rows_2604
+#duplicated_rows_2604
 
 
 # Després d'una exploració (accedint a la font original) d'alguns dels valors duplicats, s'arriba a la conclusió que es tracta d'un problema en el scraper. Es pot eliminar amb seguretat els registres duplicats i és així com es procedeix:
@@ -171,13 +171,13 @@ dataset <- select(dataset, -c(Id, Provincia, Municipi, idx, DataOferta, TipusOfe
 Ara ja tenim els 18 atributs útils + la URL a la oferta
 
 
-EN l'anàlisi exploratori inicial ens interessarem per veure quines correlacions hi ha entre les variables del dataset i particulament amb el preu del lloguer ofertat
+En l'anàlisi exploratori inicial ens interessarem per veure quines correlacions hi ha entre les variables del dataset i particulament amb el preu del lloguer ofertat
 
 En fases més avançades ens hem proposat de predir si una oferta pot baixar de preu al cap d'un temps determinat o si és possible que al cap d'aquest temp hagi desaparegut (presumptament per haver estat llogat l'habitatge). Mirem de manera preliminar quins habitatges van baixar de preu o quins van ser llogats amb el dataset actua.
 
 Nota: Considerar que el motiu pel qual una oferta que va deixar d'existir és perquè l'habitatge va ser llogat és una mica agoserat, però per simplificar, en aquesta pràctica ho considerarem així.
 
-Necessitem fer una transformació extra al dataset que podem considerar com a neteja. Els registres que tinguin NA a la columan PreuActual els podem considerar com a "Han estat llogats". Crearem una nova columna per constatar aquest fet i imputarem els NA de PreuActual amb el Preu inicial de l'oferta
+Necessitem fer una transformació extra al dataset que podem considerar com a neteja. Els registres que tinguin NA a la columna PreuActual els podem considerar com a "Han estat llogats". Crearem una nova columna per constatar aquest fet i imputarem els NA de PreuActual amb el Preu inicial de l'oferta
 ```{r message=FALSE, warning=FALSE}
 
 # Creació de nova variable lògica
@@ -213,7 +213,7 @@ str(dataset)
 Algunes dades que són categòriques estan com a Chr, alguns valors haurien de ser Lògics però estan també com a chr. Anem a convetir el tipus de cada columna al més apropiat
 
 ```{r}
-# Varibales categòriques
+# Variables categòriques
 dataset$TipusImmoble <- as.factor(dataset$TipusImmoble)
 dataset$Zona <- as.factor(dataset$Zona)
 dataset$EficienciaEnergetica <- as.factor(dataset$EficienciaEnergetica)
@@ -534,6 +534,96 @@ summary(dataset)
 ```
 
 Ara tenim un dataset amb totes les dades imputades. En alguns casos s'ha decidit no eliminar alguns outliers que s'han anat trobant, més que res perquè s'han considerat correctes. 
+
+
+
+
+
+
+
+
+
+Finalment anem a mirar les zones.
+
+
+```{r Neteja_Zones}
+
+# Primer de tot mirarem si hi han camps buits
+sum(is.na(dataset$Zona))
+sum(dataset$Zona == "")
+
+# Veiem que hi ha 639 casos amb la variable buida, aquests no els tindrem en compte
+dataset <- filter(dataset, Zona != "")
+
+# Mirem quantes zones diferents hi ha
+length(unique(dataset$Zona))
+
+# Mirem la representativitat de cada zona
+zones <- table(dataset$Zona)
+
+# Ens quedarem nomes amb els casos que tinguin un minim de representativitat, en el nostre cas agafarem nomes les zones amb mes de 50 apartaments en lloguer
+zones_a_agafar <- names(zones[zones>=50])
+dataset <- filter(dataset, Zona %in% zones_a_agafar)
+
+```
+
+## 4.1
+Seleccionarem els diferents grups, dins el nostre conjunt de dades, que ens poden resultar interesants. Tot i que es probable que no els fem servir tots. Podem fer divisio per:
+
++ Zones:
+```{r Grupd_Zones}
+# Com a exemple crearem els d'algunes de les zones amb mes apartaments en lloguer:
+dataset.Zones.SantGervasi <- filter(dataset, Zona == "Sant Gervasi - Galvany")
+dataset.Zones.Centre <- filter(dataset, Zona == "Centre")
+dataset.Zones.DretaEixample <- filter(dataset, Zona == "Dreta de l´Eixample")
+```
+
++ Tipus d’apartament:
+```{r Grupd_Tipus}
+dataset.Tipus.Pis <- filter(dataset, TipusImmoble == "piso")
+dataset.Tipus.Casa <- filter(dataset, TipusImmoble == "casa")
+dataset.Tipus.Atic <- filter(dataset, TipusImmoble == "atico")
+dataset.Tipus.Duplex <- filter(dataset, TipusImmoble == "duplex")
+dataset.Tipus.Altres <- filter(dataset, TipusImmoble == "otros")
+```
+
++ Franja de m2:
+```{r Grupd_Tamany}
+dataset.Tamany.Petit <- filter(dataset, Sup_m2 < 75)
+dataset.Tamany.Mitja <- filter(dataset, Sup_m2 >= 75 & Sup_m2 <= 105)
+dataset.Tamany.Gran <- filter(dataset, Sup_m2 > 105)
+```
+
++ Numero d’habitacions:
+```{r Grupd_Habitacions}
+dataset.Habitacions.1 <- filter(dataset, NumHabitacions == 1)
+dataset.Habitacions.2 <- filter(dataset, NumHabitacions == 2)
+dataset.Habitacions.3 <- filter(dataset, NumHabitacions == 3)
+dataset.Habitacions.4 <- filter(dataset, NumHabitacions == 4)
+dataset.Habitacions.5_o_mes <- filter(dataset, NumHabitacions >= 5)
+```
+
+## 4.2
+Comprobacio de la normalitat i homogeneitat
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
