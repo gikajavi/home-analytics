@@ -571,7 +571,7 @@ dataset <- filter(dataset, Zona %in% zones_a_agafar)
 Seleccionarem els diferents grups, dins el nostre conjunt de dades, que ens poden resultar interesants. Tot i que es probable que no els fem servir tots. Podem fer divisio per:
 
 + Zones:
-```{r Grupd_Zones}
+```{r Grup_Zones}
 # Com a exemple crearem els d'algunes de les zones amb mes apartaments en lloguer:
 dataset.Zones.SantGervasi <- filter(dataset, Zona == "Sant Gervasi - Galvany")
 dataset.Zones.Centre <- filter(dataset, Zona == "Centre")
@@ -579,7 +579,7 @@ dataset.Zones.DretaEixample <- filter(dataset, Zona == "Dreta de l´Eixample")
 ```
 
 + Tipus d’apartament:
-```{r Grupd_Tipus}
+```{r Grup_Tipus}
 dataset.Tipus.Pis <- filter(dataset, TipusImmoble == "piso")
 dataset.Tipus.Casa <- filter(dataset, TipusImmoble == "casa")
 dataset.Tipus.Atic <- filter(dataset, TipusImmoble == "atico")
@@ -588,14 +588,14 @@ dataset.Tipus.Altres <- filter(dataset, TipusImmoble == "otros")
 ```
 
 + Franja de m2:
-```{r Grupd_Tamany}
+```{r Grup_Tamany}
 dataset.Tamany.Petit <- filter(dataset, Sup_m2 < 75)
 dataset.Tamany.Mitja <- filter(dataset, Sup_m2 >= 75 & Sup_m2 <= 105)
 dataset.Tamany.Gran <- filter(dataset, Sup_m2 > 105)
 ```
 
 + Numero d’habitacions:
-```{r Grupd_Habitacions}
+```{r Grup_Habitacions}
 dataset.Habitacions.1 <- filter(dataset, NumHabitacions == 1)
 dataset.Habitacions.2 <- filter(dataset, NumHabitacions == 2)
 dataset.Habitacions.3 <- filter(dataset, NumHabitacions == 3)
@@ -605,14 +605,62 @@ dataset.Habitacions.5_o_mes <- filter(dataset, NumHabitacions >= 5)
 
 ## 4.2
 Comprobacio de la normalitat i homogeneitat
+Utilitzarem el test de Shapiro-Wilk per tal de comparar la distribució de les dades amb una distribució normal. Assumirem, com a hipòtesi nul·la, que la població està distribuïda normalment, si el p-valor és més petit que el nivell de significació, en el nostre cas farem servir un valor tipic α=0.05, llavors la hipòtesi nul·la és rebutjada i es conclou que les dades no compten amb una distribució normal. 
+
+
+
+```{r Shapiro_Wilk}
+alpha <- 0.05
+
+cat("La variable PreuActual no segueix una distribuio normal per les seguents zones:\n")
+for (i in 1:length(zones_a_agafar)){
+  zona <- zones_a_agafar[i]
+  sResult <- shapiro.test(dataset[dataset$Zona  == zona,"PreuActual"])
+  if(sResult$p.value < alpha){
+    cat(zona)
+  }
+}
+
+
+cat("\n\nLa variable Sup_m2 no segueix una distribuio normal per les seguents zones:\n")
+for (i in 1:length(zones_a_agafar)){
+  zona <- zones_a_agafar[i]
+  sResult <- shapiro.test(dataset[dataset$Zona  == zona,"Sup_m2"])
+  if(sResult$p.value < alpha){
+    cat(zona)
+  }
+}
+
+
+cat("\n\nLa variable NumHabitacions no segueix una distribuio normal per les seguents zones:\n")
+for (i in 1:length(zones_a_agafar)){
+  zona <- zones_a_agafar[i]
+  sResult <- shapiro.test(dataset[dataset$Zona  == zona,"NumHabitacions"])
+  if(sResult$p.value < alpha){
+    cat(zona)
+  }
+}
+```
+
+Veiem que en la gran majoria de casos no segueix una distribucio normal i, per tant, per mirar la homogeneitat de les variances farem servir el test de Fligner-Killeen. La hipòtesi nul·la assumeix igualtat de variàncies en els diferents grups de dades, de manera que p-valors inferiors al nivell de significació indicaran heteroscedasticitat.
+
+```{r Fligner_Killeen}
+fligner.test(PreuActual ~ Zona, data = dataset)
+```
+Com veiem que p-value < 0.05 indica heteroscedasticitat.
 
 
 
 
 
+Fi 4.2
 
 
+Per tant per comparar els diferents grups de dades haurem de fer servir una proba de Wilcoxon
 
+```{r Fligner_Killeen}
+#wilcox.test()
+```
 
 
 
