@@ -34,6 +34,8 @@ A continuació s'inclou el codi que integra en l'entorn de R les dades sobre els
 
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
+library(ggplot2)
+library(dplyr)
 
 # Càrrega del primer dataset
 filePath <-"dataset_10_04_2020.csv"
@@ -650,29 +652,112 @@ fligner.test(PreuActual ~ Zona, data = dataset)
 Com veiem que p-value < 0.05 indica heteroscedasticitat.
 
 
+## 4.3 Probes estadistiques
+
+Primer de tot farem una proba de correlacio entre les variables numeriques per a veure quines variables poden estar relacionades amb el preu de l'apartament.
+```{r Probes_Estadistiques_1}
+#1 Fem correlacio amb del Preu per a la resta de variables numeriques, per veure quines variables afecten mes en el preu final(nomes per variables numeriques)
+vars <- c("Sup_m2", "NumHabitacions", "NumBanys", "AnyConstruccio", "Planta" )
+xy <- matrix(NA, nrow = length(vars), ncol = 3)
+
+i <- 1
+
+for (var in vars){
+  result <- cor.test(dataset[,"PreuActual"], dataset[,var])
+  xy[i, ] <- c(var, result$estimate, result$p.value)
+  i <- i + 1
+}
+
+colnames(xy) <- c("Var", "cor", "p.value")
+xy <- as.data.frame(xy)
+xy
+```
+A la taula resultant veiem que de les diferents variables numeriques del nostre dataset, per al cas del preu actual la variable mes significativa es la de la superficie del apartament a llogar, seguit del nombre de banys. En els dos casos p.value es prou baix per a que poguem prendre aquestes tendencies com a fiables. De fet el que indica la taula es que en dos apartaments similars, si tota la resta de variables son iguals, pero un es una mica mes gran que l'altre, el mes gran sera mes car. 
+
+De tota manera, podriem mirar si el nombre de habitacions o el nombre de banys tindra una relacio directa amb el tamany de l'apartament, que sembla logic pensar que pot ser aixi:
+```{r Probes_Estadistiques_1_2}
+#1 Fem correlacio amb del Preu per a la resta de variables numeriques, per veure quines variables afecten mes en el preu final(nomes per variables numeriques)
+vars <- c("NumHabitacions", "NumBanys")
+xy <- matrix(NA, nrow = length(vars), ncol = 3)
+
+i <- 1
+
+for (var in vars){
+  result <- cor.test(dataset[,"Sup_m2"], dataset[,var])
+  xy[i, ] <- c(var, result$estimate, result$p.value)
+  i <- i + 1
+}
+
+colnames(xy) <- c("Var", "cor", "p.value")
+xy <- as.data.frame(xy)
+xy
+```
+Veiem que si que tenen una gran relacio entre si.
 
 
 
-Fi 4.2
+Tot seguit farem una proba de regressio linial per veure si seriem capaços de predir, per a un apartament amb certes caracteristiques(tamany, zona i si esta moblat o no), el preu per al que el podriem llogar.
+```{r Probes_Estadistiques_2}
+#2 Regressio Linial
+lm <- lm(PreuActual ~ Sup_m2 + Zona + Moblat, data=dataset)
+#lm$coefficients
+summary(lm)
+
+```
+Veient els resultats, no totes les zones tenen un p.value prou baix com per a podernos fiar dels resultats. Per a les zones amb un p.value baix creiem que podriem fer servir les dades per a calcular possibles prediccions dels preus de lloguer.
 
 
-Per tant per comparar els diferents grups de dades haurem de fer servir una proba de Wilcoxon
+Finalment probarem de crear un algoritme no supervisat de classificacio, per a obtenir tres grups diferents d'apartaments.
+```{r Probes_Estadistiques_3}
+#3 Classificacio no supervisada
+kMeansResult <- kmeans(dataset[,c("Sup_m2", "PreuActual")], centers=3)
+kMeansResult$centers
 
-```{r Fligner_Killeen}
-#wilcox.test()
+
+cluster_dataset <- dataset
+cluster_dataset$Cluster <- as.character(kMeansResult$cluster)
+
+table(cluster_dataset$Cluster)
+```
+
+Aquests tres grups els podriem arribar a anomenar, per exemple:
++ Apartaments senzills: els que tenen el nucli a 84 m2 i amb un preu de 1377 euros al mes.
++ Apartaments grans: amb el nucli a 175 m2 per 3371 euros al mes.
++ Apartaments de luxe: amb el nucli als 448 m2 i en 9436 euros al mes. D'aquests , com podem veure, n'hi hauran mes pocs.
+
+
+
+
+
+
+
+
+
+#5
+```{r Plots}
+# Clusters
+ggplot(data = cluster_dataset, mapping = aes(x = PreuActual, y = Sup_m2, colour = Cluster)) + geom_point()
+# Es pot intuir la relacio linial entre el tamany i el preu.
+ggplot(data = dataset, mapping = aes(x = PreuActual, y = Sup_m2, color = Zona, alpha = 0.3)) + geom_point()
+
+
+
+
+#Mitjana per zones, es distingeixen clarament zones mes riques i menys
+summarized_data <- dataset %>%
+                    group_by(Zona) %>% 
+                      summarise(Median_Preu=median(PreuActual), Median_Sup=median(Sup_m2))
+ggplot(summarized_data, aes(x=Median_Preu, y=Median_Sup, colour=Zona)) + geom_point()
+
+# Nombre de apartaments per zona, veiem que hi han 2 o 3 zones que destaquen per tenir molts apartaments en lloguer
+ggplot(data = dataset, mapping = aes(x = Zona, fill = Zona)) + geom_bar()
+
+
 ```
 
 
-
-
-
-
-
-
-
-
-
-
+#6
+Si que som capaços de predir el els preus que poden tenir els lloguers definint la zona, la superficie de l'apartament i si estan moblats o no tal com es pot veure en el punt 4.3.2. El problema es que el resultat obtingut no es fiable per a totes les zones, nomes per a les que el p.value era menor que el valor de significacio, tipicament 0.05.
 
 
 
@@ -680,7 +765,7 @@ Per tant per comparar els diferents grups de dades haurem de fer servir una prob
 ********************************************************************************************
 Neteja feta. 
 
-Fins aquí hem cobert 
+Fins aquí hem cobert  
 
 OK 2. Integració i selecció de dades
 OK 3. Neteja de les dadees
