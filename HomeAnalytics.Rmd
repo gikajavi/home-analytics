@@ -473,7 +473,6 @@ library(VIM)
 # El drama de kNN és escollir el valor de k. Per fer-ho bé, podríem entrenar un subconjunt del dataset (amb valors no NA) i veure amb quina k podem predir
 # millor la resta de registres que no han participat al training. En aquest punt ens coformarem amb uns quants valor de k i veure en quin cas les mesures
 # centrals no s'allunyen massa de les originals
-
 ds_knn_k5 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"))
 ds_knn_k6 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 6)
 ds_knn_k15 <- kNN(dataset, variable = c("AnyConstruccio"), dist_var = c("TipusImmoble", "Zona", "PreuInicial", "Sup_m2", "NumHabitacions", "NumBanys", "Planta", "Parking", "Calefaccio", "AC", "Moblat", "EficienciaEnergetica", "ClasseEmissions", "Jardi", "Ascensor"), k = 15)
@@ -538,13 +537,6 @@ summary(dataset)
 Ara tenim un dataset amb totes les dades imputades. En alguns casos s'ha decidit no eliminar alguns outliers que s'han anat trobant, més que res perquè s'han considerat correctes. 
 
 
-
-
-
-
-
-
-
 Finalment anem a mirar les zones.
 
 
@@ -605,9 +597,15 @@ dataset.Habitacions.4 <- filter(dataset, NumHabitacions == 4)
 dataset.Habitacions.5_o_mes <- filter(dataset, NumHabitacions >= 5)
 ```
 
+Bolquem el dataset net a un nou CSV (segons requeriment de l'enunciat)
+```{r}
+write.csv(dataset,"dataset_net.csv", row.names = T)
+```
+
+
 ## 4.2
 Comprobacio de la normalitat i homogeneitat
-Utilitzarem el test de Shapiro-Wilk per tal de comparar la distribució de les dades amb una distribució normal. Assumirem, com a hipòtesi nul·la, que la població està distribuïda normalment, si el p-valor és més petit que el nivell de significació, en el nostre cas farem servir un valor tipic α=0.05, llavors la hipòtesi nul·la és rebutjada i es conclou que les dades no compten amb una distribució normal. 
+Utilitzarem el test de Shapiro-Wilk per tal de comparar la distribució de les dades amb una distribució normal. Assumirem, com a hipòtesi nul·la, que la població està distribuïda normalment, si el p-valor és més petit que el nivell de significació, en el nostre cas farem servir un valor tipic α=0.05, llavors la hipòtesi nul·la és rebutjada i es conclou que les dades no compten amb una distribució normal.
 
 
 
@@ -756,25 +754,9 @@ ggplot(data = dataset, mapping = aes(x = Zona, fill = Zona)) + geom_bar()
 ```
 
 
-#6
-Si que som capaços de predir el els preus que poden tenir els lloguers definint la zona, la superficie de l'apartament i si estan moblats o no tal com es pot veure en el punt 4.3.2. El problema es que el resultat obtingut no es fiable per a totes les zones, nomes per a les que el p.value era menor que el valor de significacio, tipicament 0.05.
+# Conclusons:
 
+Sí que som capaços de predir el els preus que poden tenir els lloguers definint la zona, la superfície de l'apartament i si estan moblats o no tal com es pot veure en el punt 4.3.2. El problema és que el resultat obtingut no es fiable per a totes les zones, nomes per a les que el p.value era menor que el valor de significació, típicament 0.05.
 
-
-
-********************************************************************************************
-Neteja feta. 
-
-Fins aquí hem cobert  
-
-OK 2. Integració i selecció de dades
-OK 3. Neteja de les dadees
-
-
-TODO: Ara queda la resta dels apartats
-
-4. Anàlisi de les dades
-5. Representació dels resultats a partir de taules i gràfiques. 
-6. Conclusión
-
+En general, doncs, donada una sèrie de dades sobre un habitatge de l’àrea de Barcelona, podríem fer una estimació prou acurada del seu preu de lloguer en una possible oferta. Com és d’esperar, la superfície en m2 és el millor predictor del preu final. Tot i que cal dir que la zona en què l’habitatge s’ubica és també molt rellevant quan comparem les zones amb preus més alts i més baixos.
 
