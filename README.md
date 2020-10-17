@@ -17,4 +17,4 @@ En aquesta mateixa carpeta arrel trobem els següents fitxers:
     - dataset_net.csv
  - Respostes de l'enunciat:
     - Respostes.pdf    
-
+....
